@@ -1,0 +1,31 @@
+{
+  "name": "tutellus-crowdsale",
+  "version": "1.0.0",
+  "description": "Tutellus ERC20 token contracts https://www.tutellus.io/",
+  "main": "index.js",
+  "scripts": {
+    "test": "concurrently -k -s last \"scripts/test_node.sh > /dev/null\" \"truffle test --network test\"",
+    "linter": "solium --dir contracts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "babel-polyfill": "^6.26.0",
+    "babel-preset-es2015": "^6.24.1",
+    "babel-preset-stage-2": "^6.24.1",
+    "babel-preset-stage-3": "^6.24.1",
+    "babel-register": "^6.26.0",
+    "chai": "^4.1.2",
+    "chai-as-promised": "^7.1.1",
+    "chai-bignumber": "^2.0.1",
+    "concurrently": "^3.5.1",
+    "eslint": "^4.12.0",
+    "eslint-config-tutellus": "^2.1.0",
+    "ethereumjs-testrpc": "^4.1.3",
+    "moment": "^2.19.3",
+    "solium": "^1.0.0",
+    "truffle": "^3.4.11",
+    "zeppelin-solidity": "1.3.0"
+  }
+}
