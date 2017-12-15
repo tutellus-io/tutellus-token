@@ -1,10 +1,10 @@
-pragma solidity ^0.4.15;
+pragma solidity 0.4.15;
 
 import "zeppelin-solidity/contracts/crowdsale/CappedCrowdsale.sol";
 import "zeppelin-solidity/contracts/lifecycle/Pausable.sol";
 import "zeppelin-solidity/contracts/crowdsale/FinalizableCrowdsale.sol";
 import "./TokenTimelock.sol";
-import "./TutellusToken.sol";
+import "./TutellusVault.sol";
 
 /**
  * @title TutellusCrowdsale
@@ -34,23 +34,25 @@ contract TutellusCrowdsale is CappedCrowdsale, FinalizableCrowdsale, Pausable {
 
     address teamTimelock;   //Team TokenTimelock.
 
+    TutellusVault vault;
+
     function TutellusCrowdsale(
         uint256 _startTime,
         uint256 _endTime,
         uint256 _cap,
         address _wallet,
         address _teamTimelock,
-        address _tokenAddress
+        address _tutellusVault
     )
         CappedCrowdsale(_cap)
         Crowdsale(_startTime, _endTime, 1000, _wallet)
     {
         require(_teamTimelock != address(0));
-        teamTimelock = _teamTimelock;
+        require(_tutellusVault != address(0));
 
-        if (_tokenAddress != address(0)) {
-            token = TutellusToken(_tokenAddress);
-        }
+        teamTimelock = _teamTimelock;
+        vault = TutellusVault(_tutellusVault);
+        token = MintableToken(vault.token());
     }
 
     function addSpecialRateConditions(address _address, uint256 _rate) public onlyOwner {
@@ -129,7 +131,7 @@ contract TutellusCrowdsale is CappedCrowdsale, FinalizableCrowdsale, Pausable {
         // update state
         weiRaised = weiRaised.add(weiAmount);
 
-        token.mint(_address, tokens);
+        vault.mint(_address, tokens);
         TokenPurchase(msg.sender, beneficiary, weiAmount, tokens);
 
         forwardFunds();
@@ -145,11 +147,9 @@ contract TutellusCrowdsale is CappedCrowdsale, FinalizableCrowdsale, Pausable {
         uint256 tokensPool = poolTokensByPercent(poolPercent);
         uint256 tokensTeam = poolTokensByPercent(teamPercent);
 
-        token.mint(wallet, tokensPool);
-        token.mint(teamTimelock, tokensTeam);
+        vault.mint(wallet, tokensPool);
+        vault.mint(teamTimelock, tokensTeam);
     }
 
-    function createTokenContract() internal returns (MintableToken) {
-        return new TutellusToken();
-    }
+    function createTokenContract() internal returns (MintableToken) {}
 }

@@ -12,6 +12,7 @@ import {
 } from './helpers';
 
 const TutellusToken = artifacts.require("TutellusToken.sol");
+const TutellusVault = artifacts.require("TutellusVault.sol");
 const TutellusCrowdsale = artifacts.require("TutellusCrowdsale.sol");
 
 contract('TutellusCrowdsale', ([owner, wallet, whitelisted, team]) => {
@@ -54,8 +55,9 @@ contract('TutellusCrowdsale', ([owner, wallet, whitelisted, team]) => {
         startTime = moment(latestTime() * 1000).add('1', 'days').unix();
         endTime = moment(startTime * 1000).add('12', 'weeks').unix();
 
+        const vault = await TutellusVault.new();
         crowdsale = await TutellusCrowdsale
-        .new(startTime, endTime, amounts.cap, wallet, team, '0x0', {from: owner});
+        .new(startTime, endTime, amounts.cap, wallet, team, vault.address, {from: owner});
         token = TutellusToken.at(await crowdsale.token());
     });
 
