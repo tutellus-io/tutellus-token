@@ -59,6 +59,8 @@ contract('TutellusCrowdsale', ([owner, wallet, whitelisted, team]) => {
         crowdsale = await TutellusCrowdsale
         .new(startTime, endTime, amounts.cap, wallet, team, vault.address, {from: owner});
         token = TutellusToken.at(await crowdsale.token());
+
+        await vault.authorize(crowdsale.address, {from: owner});
     });
 
     describe('A normal backer, without special conditions', () => {
