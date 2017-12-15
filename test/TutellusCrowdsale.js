@@ -13,11 +13,12 @@ import {
 
 const TutellusToken = artifacts.require("TutellusToken.sol");
 const TutellusVault = artifacts.require("TutellusVault.sol");
+const TutellusLockerVault = artifacts.require("TutellusLockerVault.sol");
 const TutellusCrowdsale = artifacts.require("TutellusCrowdsale.sol");
 
 contract('TutellusCrowdsale', ([owner, wallet, whitelisted, team]) => {
     let crowdsale;
-    let token;
+    let token, locker;
     let startTime, endTime;
 
     const MARGIN_TIME_GAP = 7200;
@@ -56,11 +57,17 @@ contract('TutellusCrowdsale', ([owner, wallet, whitelisted, team]) => {
         endTime = moment(startTime * 1000).add('12', 'weeks').unix();
 
         const vault = await TutellusVault.new();
+        const token_address = await vault.token();
+
+        locker = await TutellusLockerVault.new(endTime, token_address, {from: owner});
+
         crowdsale = await TutellusCrowdsale
-        .new(startTime, endTime, amounts.cap, wallet, team, vault.address, {from: owner});
-        token = TutellusToken.at(await crowdsale.token());
+        .new(startTime, endTime, amounts.cap, wallet, team, vault.address, locker.address, {from: owner});
+        token = TutellusToken.at(token_address);
 
         await vault.authorize(crowdsale.address, {from: owner});
+        await locker.authorize(crowdsale.address, {from: owner});
+        await locker.authorize(owner, {from: owner});
     });
 
     describe('A normal backer, without special conditions', () => {
@@ -81,28 +88,72 @@ contract('TutellusCrowdsale', ([owner, wallet, whitelisted, team]) => {
                     from: whitelisted,
                 });
             });
-            it('should have TUTs on Timelock (+50% on first week)', async() => {
+            it('should have TUTs on Locker (+50% on first week)', async() => {
                 const EXPECTED = 300000;
-                const timelock = await crowdsale.getTimelock(whitelisted);
-                await shouldHaveTokenBalance(token, timelock, EXPECTED);
+                await shouldHaveTokenBalance(token, locker.address, EXPECTED);
             });
             it('should have NO TUTs on sender address', async() => {
                 const EXPECTED = 0;
                 await shouldHaveTokenBalance(token, whitelisted, EXPECTED);
             });
         });
-        it('when send twice ether should reuse the timelock contract', async() => {
+        it('when send twice ether should have all on locker ', async() => {
+            const EXPECTED = 300000 * 2; //eslint-disable-line no-magic-numbers
+            const espected_wei = etherToWei(EXPECTED);
             await crowdsale.buyTokens(whitelisted, {
                 value: amounts.normal,
                 from: whitelisted,
             });
-            const timelock = await crowdsale.getTimelock(whitelisted);
             await crowdsale.buyTokens(whitelisted, {
                 value: amounts.normal,
                 from: whitelisted,
             });
-            const timelock_after = await crowdsale.getTimelock(whitelisted);
-            timelock_after.should.equal(timelock);
+            const balance = await locker.amounts(whitelisted);
+            balance.should.bignumber.equal(espected_wei);
+        });
+
+        describe('when try to release', () => {
+            beforeEach(async() => {
+                await crowdsale.buyTokens(whitelisted, {
+                    value: amounts.normal,
+                    from: whitelisted,
+                });
+            });
+            it('fail if not ended and verified', async() => {
+                await locker.release({from: whitelisted})
+                .should.be.rejectedWith(EVMThrow);
+            });
+            it('not fail if ended and verified', async() => {
+                await increaseTimeTo(endTime);
+                await locker.verify(whitelisted, {from: owner});
+                await locker.release({from: whitelisted})
+                .should.be.fulfilled;
+            });
+        });
+        describe('after release', () => {
+            beforeEach(async() => {
+                await crowdsale.buyTokens(whitelisted, {
+                    value: amounts.normal,
+                    from: whitelisted,
+                });
+                await increaseTimeTo(endTime);
+                await locker.verify(whitelisted, {from: owner});
+                await locker.release({from: whitelisted})
+                .should.be.fulfilled;
+            });
+            it('Locker should have CERO TUTS', async() => {
+                const EXPECTED = 0;
+                await shouldHaveTokenBalance(token, locker.address, EXPECTED);
+            });
+            it('investor should have ALL TUTs', async() => {
+                const EXPECTED = 300000;
+                await shouldHaveTokenBalance(token, whitelisted, EXPECTED);
+            });
+            it('should can`t release twice', async() => {
+                await locker.release({from: whitelisted});
+                const EXPECTED = 300000;
+                await shouldHaveTokenBalance(token, whitelisted, EXPECTED);
+            });
         });
     });
 
@@ -143,8 +194,7 @@ contract('TutellusCrowdsale', ([owner, wallet, whitelisted, team]) => {
             });
             it('should have TUTs on Timelock', async() => {
                 const EXPECTED = 5000000;
-                const timelock = await crowdsale.getTimelock(whitelisted);
-                await shouldHaveTokenBalance(token, timelock, EXPECTED);
+                await shouldHaveTokenBalance(token, locker.address, EXPECTED);
             });
             it('should have NO TUTs on sender address', async() => {
                 const EXPECTED = 0;

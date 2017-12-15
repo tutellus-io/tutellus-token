@@ -4,7 +4,7 @@ import './Authorizable.sol';
 import "./TutellusToken.sol";
 
 contract TutellusVault is Authorizable {
-    event VaultMint(address authAddress, bytes32 method);
+    event VaultMint(address indexed authAddress);
 
     TutellusToken public token;
 
@@ -13,7 +13,10 @@ contract TutellusVault is Authorizable {
     }
 
     function mint(address _to, uint256 _amount) authorized public returns (bool) {
-        VaultMint(msg.sender, ".mint");
+        require(_to != address(0));
+        require(_amount >= 0);
+
+        VaultMint(msg.sender);
         return token.mint(_to, _amount);
     }
 }

@@ -3,8 +3,8 @@ pragma solidity 0.4.15;
 import "zeppelin-solidity/contracts/crowdsale/CappedCrowdsale.sol";
 import "zeppelin-solidity/contracts/lifecycle/Pausable.sol";
 import "zeppelin-solidity/contracts/crowdsale/FinalizableCrowdsale.sol";
-import "./TokenTimelock.sol";
 import "./TutellusVault.sol";
+import "./TutellusLockerVault.sol";
 
 /**
  * @title TutellusCrowdsale
@@ -20,8 +20,6 @@ contract TutellusCrowdsale is CappedCrowdsale, FinalizableCrowdsale, Pausable {
     
     mapping(address => uint256) public conditions;
 
-    mapping(address => address) public timelocksContracts;
-
     uint256 salePercent = 60;   // Percent of TUTs for sale
     uint256 poolPercent = 30;   // Percent of TUTs for pool
     uint256 teamPercent = 10;   // Percent of TUTs for team
@@ -35,6 +33,7 @@ contract TutellusCrowdsale is CappedCrowdsale, FinalizableCrowdsale, Pausable {
     address teamTimelock;   //Team TokenTimelock.
 
     TutellusVault vault;
+    TutellusLockerVault locker;
 
     function TutellusCrowdsale(
         uint256 _startTime,
@@ -42,7 +41,8 @@ contract TutellusCrowdsale is CappedCrowdsale, FinalizableCrowdsale, Pausable {
         uint256 _cap,
         address _wallet,
         address _teamTimelock,
-        address _tutellusVault
+        address _tutellusVault,
+        address _lockerVault
     )
         CappedCrowdsale(_cap)
         Crowdsale(_startTime, _endTime, 1000, _wallet)
@@ -53,6 +53,8 @@ contract TutellusCrowdsale is CappedCrowdsale, FinalizableCrowdsale, Pausable {
         teamTimelock = _teamTimelock;
         vault = TutellusVault(_tutellusVault);
         token = MintableToken(vault.token());
+
+        locker = TutellusLockerVault(_lockerVault);
     }
 
     function addSpecialRateConditions(address _address, uint256 _rate) public onlyOwner {
@@ -85,53 +87,31 @@ contract TutellusCrowdsale is CappedCrowdsale, FinalizableCrowdsale, Pausable {
         }
     }
 
-    function getTimelock(address _address) public constant returns(address) {
-        return timelocksContracts[_address];
-    }
-
-    function getValidTimelock(address _address) internal returns(address) {
-        address timelockAddress = getTimelock(_address);
-        // check, if not have already one
-        if (timelockAddress == address(0)) {
-            timelockAddress = new TokenTimelock(token, _address, endTime);
-            timelocksContracts[_address] = timelockAddress;
-        }
-        return timelockAddress;
-    }
-
     function buyTokens(address beneficiary) whenNotPaused public payable {
         require(beneficiary != address(0));
         require(msg.value >= minICO && msg.value <= vestingLimit);
         require(validPurchase());
 
-        uint256 rate;
-        address contractAddress;
+        uint256 senderRate;
 
         if (conditions[beneficiary] != 0) {
             require(msg.value >= specialLimit);
-            rate = conditions[beneficiary];
+            senderRate = conditions[beneficiary];
         } else {
-            rate = getRateByTime();
-            if (rate > 1200) {
+            senderRate = getRateByTime();
+            if (senderRate > 1200) {
                 require(msg.value >= minPreICO);
             }
         }
 
-        contractAddress = getValidTimelock(beneficiary);
-
-        mintTokens(rate, contractAddress, beneficiary);
-    }
-
-    function mintTokens(uint _rate, address _address, address beneficiary) internal {
         uint256 weiAmount = msg.value;
-
         // calculate token amount to be created
-        uint256 tokens = weiAmount.mul(_rate);
-
+        uint256 tokens = weiAmount.mul(senderRate);
         // update state
         weiRaised = weiRaised.add(weiAmount);
 
-        vault.mint(_address, tokens);
+        locker.deposit(beneficiary, tokens);
+        vault.mint(locker, tokens);
         TokenPurchase(msg.sender, beneficiary, weiAmount, tokens);
 
         forwardFunds();
