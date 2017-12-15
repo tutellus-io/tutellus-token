@@ -4,14 +4,14 @@ import 'zeppelin-solidity/contracts/ownership/Ownable.sol';
 import "./TutellusToken.sol";
 
 contract TutellusVault is Ownable {
-    event Authorized(address authAddress);
-    event Minted(address authAddress);
+    event LogAccess(address authAddress);
+    event ProxyAction(address authAddress, bytes32 method);
     
     mapping(address => bool) auth;
 
     modifier authorized() {
-        // require(auth[msg.sender]);
-        Authorized(msg.sender);
+        LogAccess(msg.sender);
+        require(auth[msg.sender]);
         _;
     }
 
@@ -22,7 +22,16 @@ contract TutellusVault is Ownable {
     }
 
     function mint(address _to, uint256 _amount) authorized public returns (bool) {
-        Minted(msg.sender);
+        ProxyAction(msg.sender, ".mint");
         return token.mint(_to, _amount);
+    }
+
+    function authorize(address _address) onlyOwner public returns (bool) {
+        auth[_address] = true;
+        return true;
+    }
+    function unauthorize(address _address) onlyOwner public returns (bool) {
+        auth[_address] = false;
+        return false;
     }
 }
