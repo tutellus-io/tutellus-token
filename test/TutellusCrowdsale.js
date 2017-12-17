@@ -23,16 +23,22 @@ contract('TutellusCrowdsale', ([owner, wallet, whitelisted, team]) => {
 
     const MARGIN_TIME_GAP = 7200;
 
-    const CAP_ETHER = 1000;
-    const SPECIAL_ETHER = 500;
-    const LO_SPECIAL_ETHER = 300;
+    const CAP_ETHER = 800;
+    const SPECIAL_ETHER = 400;
+    const LO_SPECIAL_ETHER = 200;
     const NORMAL_ETHER = 200;
-    const HI_LIMIT_ETHER = 700.1;
-    const LO_LIMIT_ETHER = 299.9;
-    const MIN_ICO = 0.5;
-    const MIN_ICO_FAIL = 0.45;
-    const MIN_PREICO = 10;
-    const MIN_PREICO_FAIL = 9.95;
+    const HI_LIMIT_ETHER = 500.1;
+    const LO_LIMIT_ETHER = 199.9;
+    const MIN_ICO = 0.05;
+    const MIN_ICO_FAIL = 0.045;
+    const MIN_PREICO = 5;
+    const MIN_PREICO_FAIL = 4.95;
+
+    const LIMIT_VESTING = 400;
+    const LIMIT_SPECIAL = 200;
+
+    const DAY_SECONDS = 86400;
+    const calcSeconds = times => times * DAY_SECONDS;
 
     const amounts = {
         cap: etherToWei(CAP_ETHER),
@@ -45,6 +51,8 @@ contract('TutellusCrowdsale', ([owner, wallet, whitelisted, team]) => {
         min_ico_fail: etherToWei(MIN_ICO_FAIL),
         min_preico: etherToWei(MIN_PREICO),
         min_preico_fail: etherToWei(MIN_PREICO_FAIL),
+        limit_vesting: etherToWei(LIMIT_VESTING),
+        limit_special: etherToWei(LIMIT_SPECIAL),
     };
 
     before(async() => {
@@ -61,8 +69,24 @@ contract('TutellusCrowdsale', ([owner, wallet, whitelisted, team]) => {
 
         locker = await TutellusLockerVault.new(endTime, token_address, {from: owner});
 
+        const params = [
+            startTime,
+            endTime,
+            amounts.cap,
+            wallet,
+            team,
+            vault.address,
+            locker.address,
+            amounts.limit_vesting,
+            amounts.limit_special,
+            amounts.min_preico,
+            amounts.min_ico,
+            DAY_SECONDS,
+            {from: owner},
+        ];
+
         crowdsale = await TutellusCrowdsale
-        .new(startTime, endTime, amounts.cap, wallet, team, vault.address, locker.address, {from: owner});
+        .new(...params);
         token = TutellusToken.at(token_address);
 
         await vault.authorize(crowdsale.address, {from: owner});
@@ -89,7 +113,7 @@ contract('TutellusCrowdsale', ([owner, wallet, whitelisted, team]) => {
                 });
             });
             it('should have TUTs on Locker (+50% on first week)', async() => {
-                const EXPECTED = 300000;
+                const EXPECTED = 450000;
                 await shouldHaveTokenBalance(token, locker.address, EXPECTED);
             });
             it('should have NO TUTs on sender address', async() => {
@@ -98,7 +122,7 @@ contract('TutellusCrowdsale', ([owner, wallet, whitelisted, team]) => {
             });
         });
         it('when send twice ether should have all on locker ', async() => {
-            const EXPECTED = 300000 * 2; //eslint-disable-line no-magic-numbers
+            const EXPECTED = 450000 * 2; //eslint-disable-line no-magic-numbers
             const espected_wei = etherToWei(EXPECTED);
             await crowdsale.buyTokens(whitelisted, {
                 value: amounts.normal,
@@ -146,12 +170,12 @@ contract('TutellusCrowdsale', ([owner, wallet, whitelisted, team]) => {
                 await shouldHaveTokenBalance(token, locker.address, EXPECTED);
             });
             it('investor should have ALL TUTs', async() => {
-                const EXPECTED = 300000;
+                const EXPECTED = 450000;
                 await shouldHaveTokenBalance(token, whitelisted, EXPECTED);
             });
             it('should can`t release twice', async() => {
                 await locker.release({from: whitelisted});
-                const EXPECTED = 300000;
+                const EXPECTED = 450000;
                 await shouldHaveTokenBalance(token, whitelisted, EXPECTED);
             });
         });
@@ -193,7 +217,7 @@ contract('TutellusCrowdsale', ([owner, wallet, whitelisted, team]) => {
                 });
             });
             it('should have TUTs on Timelock', async() => {
-                const EXPECTED = 5000000;
+                const EXPECTED = 4000000;
                 await shouldHaveTokenBalance(token, locker.address, EXPECTED);
             });
             it('should have NO TUTs on sender address', async() => {
@@ -279,7 +303,7 @@ contract('TutellusCrowdsale', ([owner, wallet, whitelisted, team]) => {
 
         describe('on ICO', () => {
             beforeEach(async() => {
-                const startTimeICO = moment(startTime * 1000).add(8, 'weeks').unix(); //eslint-disable-line no-magic-numbers
+                const startTimeICO = moment(startTime * 1000).add(calcSeconds(73), 'seconds').unix(); //eslint-disable-line no-magic-numbers
                 await increaseTimeTo(startTimeICO + MARGIN_TIME_GAP);
             });
             it('should accept transactions avobe limit', async() => {
@@ -309,75 +333,75 @@ contract('TutellusCrowdsale', ([owner, wallet, whitelisted, team]) => {
             await rateShouldBeOnDate(rate_expected, from + MARGIN_TIME_GAP);
             await rateShouldBeOnDate(rate_expected, to - MARGIN_TIME_GAP);
         };
-        describe('the first two weeks', () => {
-            it('should be +50% (1500)', async() => {
-                const RATE_EXPECTED = 1500;
+        describe('the first round pre-ico', () => {
+            it('should be +50% (2250)', async() => {
+                const RATE_EXPECTED = 2250;
                 await rateShouldBe(RATE_EXPECTED, {
                     from: startTime,
-                    to: moment(startTime * 1000).add('2', 'weeks').unix(),
+                    to: moment(startTime * 1000).add(calcSeconds(28), 'seconds').unix(), //eslint-disable-line no-magic-numbers
                 });
             });
         });
-        describe('the third and fourth week', () => {
-            it('should be +45% (1450)', async() => {
-                const RATE_EXPECTED = 1450;
+        describe('the second round pre-ico', () => {
+            it('should be +45% (2175)', async() => {
+                const RATE_EXPECTED = 2175;
                 await rateShouldBe(RATE_EXPECTED, {
-                    from: moment(startTime * 1000).add('2', 'weeks').unix(),
-                    to: moment(startTime * 1000).add('4', 'weeks').unix(),
+                    from: moment(startTime * 1000).add(calcSeconds(28), 'seconds').unix(), //eslint-disable-line no-magic-numbers
+                    to: moment(startTime * 1000).add(calcSeconds(42), 'seconds').unix(), //eslint-disable-line no-magic-numbers
                 });
             });
         });
-        describe('the fifth and sixth week', () => {
-            it('should be +40% (1400)', async() => {
-                const RATE_EXPECTED = 1400;
+        describe('the third round pre-ico', () => {
+            it('should be +40% (2100)', async() => {
+                const RATE_EXPECTED = 2100;
                 await rateShouldBe(RATE_EXPECTED, {
-                    from: moment(startTime * 1000).add('4', 'weeks').unix(),
-                    to: moment(startTime * 1000).add('6', 'weeks').unix(),
+                    from: moment(startTime * 1000).add(calcSeconds(42), 'seconds').unix(), //eslint-disable-line no-magic-numbers
+                    to: moment(startTime * 1000).add(calcSeconds(56), 'seconds').unix(), //eslint-disable-line no-magic-numbers
                 });
             });
         });
-        describe('the seventh and eighth week', () => {
-            it('should be +35% (1350)', async() => {
-                const RATE_EXPECTED = 1350;
+        describe('the fourth round pre-ico', () => {
+            it('should be +35% (2025)', async() => {
+                const RATE_EXPECTED = 2025;
                 await rateShouldBe(RATE_EXPECTED, {
-                    from: moment(startTime * 1000).add('6', 'weeks').unix(),
-                    to: moment(startTime * 1000).add('8', 'weeks').unix(),
+                    from: moment(startTime * 1000).add(calcSeconds(56), 'seconds').unix(), //eslint-disable-line no-magic-numbers
+                    to: moment(startTime * 1000).add(calcSeconds(73), 'seconds').unix(), //eslint-disable-line no-magic-numbers
                 });
             });
         });
-        describe('the ninth week', () => {
-            it('should be +20% (1200)', async() => {
-                const RATE_EXPECTED = 1200;
+        describe('the first round ico', () => {
+            it('should be +20% (1800)', async() => {
+                const RATE_EXPECTED = 1800;
                 await rateShouldBe(RATE_EXPECTED, {
-                    from: moment(startTime * 1000).add('8', 'weeks').unix(),
-                    to: moment(startTime * 1000).add('9', 'weeks').unix(),
+                    from: moment(startTime * 1000).add(calcSeconds(73), 'seconds').unix(), //eslint-disable-line no-magic-numbers
+                    to: moment(startTime * 1000).add(calcSeconds(80), 'seconds').unix(), //eslint-disable-line no-magic-numbers
                 });
             });
         });
-        describe('the tenth week', () => {
-            it('should be +10% (1100)', async() => {
-                const RATE_EXPECTED = 1100;
+        describe('the second round ico', () => {
+            it('should be +10% (1650)', async() => {
+                const RATE_EXPECTED = 1650;
                 await rateShouldBe(RATE_EXPECTED, {
-                    from: moment(startTime * 1000).add('9', 'weeks').unix(),
-                    to: moment(startTime * 1000).add('10', 'weeks').unix(),
+                    from: moment(startTime * 1000).add(calcSeconds(80), 'seconds').unix(), //eslint-disable-line no-magic-numbers
+                    to: moment(startTime * 1000).add(calcSeconds(87), 'seconds').unix(), //eslint-disable-line no-magic-numbers
                 });
             });
         });
-        describe('the eleventh week', () => {
-            it('should be +5% (1050)', async() => {
-                const RATE_EXPECTED = 1050;
+        describe('the third round ico', () => {
+            it('should be +5% (1575)', async() => {
+                const RATE_EXPECTED = 1575;
                 await rateShouldBe(RATE_EXPECTED, {
-                    from: moment(startTime * 1000).add('10', 'weeks').unix(),
-                    to: moment(startTime * 1000).add('11', 'weeks').unix(),
+                    from: moment(startTime * 1000).add(calcSeconds(87), 'seconds').unix(), //eslint-disable-line no-magic-numbers
+                    to: moment(startTime * 1000).add(calcSeconds(94), 'seconds').unix(), //eslint-disable-line no-magic-numbers
                 });
             });
         });
-        describe('the last week', () => {
-            it('should be +0% (1000)', async() => {
-                const RATE_EXPECTED = 1000;
+        describe('the fourth round ico', () => {
+            it('should be +0% (1500)', async() => {
+                const RATE_EXPECTED = 1500;
                 await rateShouldBe(RATE_EXPECTED, {
-                    from: moment(startTime * 1000).add('11', 'weeks').unix(),
-                    to: moment(startTime * 1000).add('12', 'weeks').unix(),
+                    from: moment(startTime * 1000).add(calcSeconds(94), 'seconds').unix(), //eslint-disable-line no-magic-numbers
+                    to: moment(startTime * 1000).add(calcSeconds(103), 'seconds').unix(), //eslint-disable-line no-magic-numbers
                 });
             });
         });
@@ -418,11 +442,11 @@ contract('TutellusCrowdsale', ([owner, wallet, whitelisted, team]) => {
             await crowdsale.finalize({from: owner});
         });
         it('the pool should have 30% minted', async() => {
-            const EXPECTED = 150000;
+            const EXPECTED = 225000;
             await shouldHaveTokenBalance(token, wallet, EXPECTED);
         });
         it('the team should have 10% minted', async() => {
-            const EXPECTED = 50000;
+            const EXPECTED = 75000;
             await shouldHaveTokenBalance(token, team, EXPECTED);
         });
     });

@@ -24,13 +24,15 @@ contract TutellusCrowdsale is CappedCrowdsale, FinalizableCrowdsale, Pausable {
     uint256 poolPercent = 30;   // Percent of TUTs for pool
     uint256 teamPercent = 10;   // Percent of TUTs for team
 
-    uint256 vestingLimit = 700 ether;
-    uint256 specialLimit = 300 ether;
+    uint256 vestingLimit; // 400 ether;
+    uint256 specialLimit; // 200 ether;
 
-    uint256 minPreICO = 10 ether;
-    uint256 minICO = 0.5 ether;
+    uint256 minPreICO; // 5 ether;
+    uint256 minICO; // 0.05 ether;
 
-    address teamTimelock;   //Team TokenTimelock.
+    uint256 unitTimeSecs; //86400 secs;
+
+    address teamTimelock; //Team TokenTimelock.
 
     TutellusVault vault;
     TutellusLockerVault locker;
@@ -42,19 +44,33 @@ contract TutellusCrowdsale is CappedCrowdsale, FinalizableCrowdsale, Pausable {
         address _wallet,
         address _teamTimelock,
         address _tutellusVault,
-        address _lockerVault
+        address _lockerVault,
+        uint256 _vestingLimit,
+        uint256 _specialLimit,
+        uint256 _minPreICO,
+        uint256 _minICO,
+        uint256 _unitTimeSecs
     )
         CappedCrowdsale(_cap)
         Crowdsale(_startTime, _endTime, 1000, _wallet)
     {
         require(_teamTimelock != address(0));
         require(_tutellusVault != address(0));
+        require(_vestingLimit > _specialLimit);
+        require(_minPreICO > _minICO);
+        require(_unitTimeSecs > 0);
 
         teamTimelock = _teamTimelock;
         vault = TutellusVault(_tutellusVault);
         token = MintableToken(vault.token());
 
         locker = TutellusLockerVault(_lockerVault);
+
+        vestingLimit = _vestingLimit;
+        specialLimit = _specialLimit;
+        minPreICO = _minPreICO;
+        minICO = _minICO;
+        unitTimeSecs = _unitTimeSecs;
     }
 
     function addSpecialRateConditions(address _address, uint256 _rate) public onlyOwner {
@@ -68,22 +84,22 @@ contract TutellusCrowdsale is CappedCrowdsale, FinalizableCrowdsale, Pausable {
     // Returns TUTs rate per 1 ETH depending on current time
     function getRateByTime() public constant returns (uint256) {
         uint256 timeNow = now;
-        if (timeNow > (startTime + 11 weeks)) {
-            return 1000;
-        } else if (timeNow > (startTime + 10 weeks)) {
-            return 1050; // + 5%
-        } else if (timeNow > (startTime + 9 weeks)) {
-            return 1100; // + 10%
-        } else if (timeNow > (startTime + 8 weeks)) {
-            return 1200; // + 20%
-        } else if (timeNow > (startTime + 6 weeks)) {
-            return 1350; // + 35%
-        } else if (timeNow > (startTime + 4 weeks)) {
-            return 1400; // + 40%
-        } else if (timeNow > (startTime + 2 weeks)) {
-            return 1450; // + 45%
+        if (timeNow > (startTime + 94 * unitTimeSecs)) {
+            return 1500;
+        } else if (timeNow > (startTime + 87 * unitTimeSecs)) {
+            return 1575; // + 5%
+        } else if (timeNow > (startTime + 80 * unitTimeSecs)) {
+            return 1650; // + 10%
+        } else if (timeNow > (startTime + 73 * unitTimeSecs)) {
+            return 1800; // + 20%
+        } else if (timeNow > (startTime + 56 * unitTimeSecs)) {
+            return 2025; // + 35%
+        } else if (timeNow > (startTime + 42 * unitTimeSecs)) {
+            return 2100; // + 40%
+        } else if (timeNow > (startTime + 28 * unitTimeSecs)) {
+            return 2175; // + 45%
         } else {
-            return 1500; // + 50%
+            return 2250; // + 50%
         }
     }
 
@@ -99,7 +115,7 @@ contract TutellusCrowdsale is CappedCrowdsale, FinalizableCrowdsale, Pausable {
             senderRate = conditions[beneficiary];
         } else {
             senderRate = getRateByTime();
-            if (senderRate > 1200) {
+            if (senderRate > 1800) {
                 require(msg.value >= minPreICO);
             }
         }
