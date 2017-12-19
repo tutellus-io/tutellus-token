@@ -1,23 +1,101 @@
+/*eslint-disable max-statements,complexity*/
 const moment = require('moment');
+const _ = require('lodash');
 
-const TutellusVault = artifacts.require("./TutellusVault.sol");
-const TutellusCrowdsale = artifacts.require("./TutellusCrowdsale.sol");
+const TutellusVault = artifacts.require("TutellusVault.sol");
+const TutellusLockerVault = artifacts.require("TutellusLockerVault.sol");
+const MultiSigWallet = artifacts.require("MultiSigWallet.sol");
+const TutellusCrowdsale = artifacts.require("TutellusCrowdsale.sol");
 
-module.exports = function(deployer, network, accounts) {
+const deployMultiSig = async({deployer, owner, founders, required}) => {
+    const valid_founders = _.uniq(founders);
+    await deployer.deploy(MultiSigWallet, valid_founders, required, {from: owner});
+    return MultiSigWallet.at(MultiSigWallet.address);
+};
+
+module.exports = async(deployer, network) => {
     if (network.indexOf('test') > -1) return; // dont deploy on tests
-    const owner = accounts[0];
-    const wallet = accounts[1];
-    const team = accounts[2];
 
-    deployer.deploy(TutellusVault, {from: owner})
-    .then(() => {
-        const startTime = moment(new Date(web3.eth.getBlock('latest').timestamp * 1000)).add(1, 'day').unix();
-        const endTime = moment(new Date(startTime * 1000)).add(12, "weeks").unix();
-        const rate = new web3.BigNumber(100);
-        const cap = new web3.BigNumber(web3.toWei(2000, 'ether'));
-        console.log('TutellusCrowdsale - params', startTime, endTime, rate, cap);
+    let owner = '0x2797717da4b2d52c19dc3215139fb45df7338bf2';
+    let founders = ['0x1234d3ea83d3dd6a9ef68a6acb751b788b8294a9', '0x46e061ec98770d488c89a2d438f8b62c9460b681'];
 
-        deployer.deploy(TutellusCrowdsale, startTime, endTime, cap, wallet, team, TutellusVault.address);
-    })
-    .catch(error => console.log('Error', error));
+    if (network.indexOf('rinkeby') > -1) {
+        owner = '0x8f6e232a3bbf0c4191aa6214742f271f343b0864';
+        founders = ['0x24114495ecbf92396b3802877f584797b891164f', '0xffaf638443eb1135b9905d73588d44e680394edf'];
+    }
+
+    if (network.indexOf('live') > -1) {
+        owner = '0x0345b940fab0db7c79ef1e0bc2e2cd58b460f551';
+        founders = ["0xe32400C937F009ee71Fd96f55D5645343b200B97", "0x89680067dF55E613497b44828E0f67617eA47444", "0x943B71Dd451dAA8097bC2aD6d4afb7517cB4Cf3f"];
+    }
+
+
+    const etherToWei = value => new web3.BigNumber(web3.toWei(value, 'ether'));
+
+    const unitTimeSecs = 86400;
+    const startTime = 1513623600; // 18/12/2017
+    const endTime = moment(new Date(startTime * 1000)).add(103 * unitTimeSecs, "seconds").unix();
+    // await deployer.deploy(TutellusVault, {from: owner, overwrite: false});
+    const vault_address = '0xB195028223Ec191b195125118D2EE90881a874Eb';
+    const vault = TutellusVault.at(vault_address);
+    const token_address = await vault.token();
+    // await deployer.deploy(TutellusLockerVault, endTime, token_address, {from: owner, overwrite: false});
+    const lock_address = '0xd2f346A4809D9A962ffDFa905F6FDb9A1EB79595';
+    const locker = TutellusVault.at(lock_address);
+
+    // const wallet = await deployMultiSig({
+    //     deployer,
+    //     owner,
+    //     founders,
+    //     required: 2,
+    // });
+
+    const wallet_address = '0xf70A4427C7c508c79Fb86d8508a8bd3fDB199f76';
+
+    // const team = await deployMultiSig({
+    //     deployer,
+    //     owner,
+    //     founders,
+    //     required: 2,
+    // });
+
+    const team_address = '0xD5B04db9AAd7D8f453637b79b399a1da4A3D5c2c';
+
+    const params = [
+        startTime,
+        endTime,
+        etherToWei(40000),
+        wallet_address,
+        team_address,
+        vault_address,
+        lock_address,
+        etherToWei(400),
+        etherToWei(200),
+        etherToWei(5),
+        etherToWei(0.05),
+        unitTimeSecs,
+    ];
+    console.log('Params: ', params);
+    // await deployer.deploy(TutellusCrowdsale, ...params, {from: owner});
+
+    const crowdsale_address = '0x0F3D5562cA6084F7d59CE10Dc5aB672257573dE6';
+
+    console.log(`
+        owner: ${owner}
+        founders: ${founders}
+        startTime: ${startTime} s
+        endTime: ${endTime} s
+        Tutellus Vault: ${vault_address}
+        Tutellus Token: ${token_address}
+        Tutellus Locker Vault: ${lock_address}
+        Wallet MultiSig: ${wallet_address}
+        Team Multisig: ${team_address}
+        Crowdsale Address: ${crowdsale_address}
+    `);
+
+    //Authorizations
+    // await vault.authorize(crowdsale_address, {from: owner});
+    // await locker.authorize(crowdsale_address, {from: owner});
+    // await locker.authorize(owner, {from: owner});
+    // console.log('Authorized!');
 };
