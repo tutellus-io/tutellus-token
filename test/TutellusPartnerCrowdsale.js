@@ -14,11 +14,13 @@ import {
 } from './helpers';
 
 const TutellusToken = artifacts.require("TutellusToken.sol");
+const TutellusVault = artifacts.require("TutellusVault.sol");
+const TutellusVestingFactory = artifacts.require("TutellusVestingFactory.sol");
 const TutellusPartnerCrowdsale = artifacts.require("TutellusPartnerCrowdsale.sol");
 
 contract('TutellusPartnerCrowdsale', ([owner, wallet, whitelisted, partner]) => {
     let crowdsale;
-    let token;
+    let token, vestingFactory;
     let startTime, endTime;
 
     const CAP_ETHER = 1000;
@@ -45,9 +47,31 @@ contract('TutellusPartnerCrowdsale', ([owner, wallet, whitelisted, partner]) => 
         const rate = 1000;
         const percent = 10;
 
+        const vault = await TutellusVault.new();
+        const token_address = await vault.token();
+        token = TutellusToken.at(token_address);
+
+        vestingFactory = await TutellusVestingFactory.new(token_address, {from: owner});
+
+        const params = [
+            startTime,
+            endTime,
+            amounts.cap,
+            cliff,
+            duration,
+            rate,
+            wallet,
+            partner,
+            percent,
+            vault.address,
+            vestingFactory.address,
+        ];
+
         crowdsale = await TutellusPartnerCrowdsale
-        .new(startTime, endTime, amounts.cap, cliff, duration, rate, wallet, partner, percent, '0x0', {from: owner});
-        token = TutellusToken.at(await crowdsale.token());
+        .new(...params, {from: owner});
+
+        await vault.authorize(crowdsale.address, {from: owner});
+        await vestingFactory.authorize(crowdsale.address, {from: owner});
     });
 
     describe('basically', () => {
@@ -70,7 +94,7 @@ contract('TutellusPartnerCrowdsale', ([owner, wallet, whitelisted, partner]) => 
             });
             it('should have TUTs on Vesting contract', async() => {
                 const EXPECTED = 200000;
-                const vesting = await crowdsale.getVesting(whitelisted);
+                const vesting = await vestingFactory.getVesting(whitelisted, {from: crowdsale.address});
                 await shouldHaveTokenBalance(token, vesting, EXPECTED);
             });
             it('should have NO TUTs on sender address', async() => {
@@ -78,12 +102,12 @@ contract('TutellusPartnerCrowdsale', ([owner, wallet, whitelisted, partner]) => 
                 await shouldHaveTokenBalance(token, whitelisted, EXPECTED);
             });
             it('and send twice should reuse the vesting contract', async() => {
-                const vesting = await crowdsale.getVesting(whitelisted);
+                const vesting = await vestingFactory.getVesting(whitelisted, {from: crowdsale.address});
                 await crowdsale.buyTokens(whitelisted, {
                     value: amounts.normal,
                     from: whitelisted,
                 });
-                const vesting_after = await crowdsale.getVesting(whitelisted);
+                const vesting_after = await vestingFactory.getVesting(whitelisted, {from: crowdsale.address});
                 vesting_after.should.equal(vesting);
             });
             it('should retain a percentage of ether indicated in contract', async() => {

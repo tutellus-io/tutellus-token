@@ -2,8 +2,8 @@ pragma solidity ^0.4.15;
 
 import "zeppelin-solidity/contracts/crowdsale/CappedCrowdsale.sol";
 import "zeppelin-solidity/contracts/lifecycle/Pausable.sol";
-import "./TokenVesting.sol";
-import "./TutellusToken.sol";
+import "./TutellusVestingFactory.sol";
+import "./TutellusVault.sol";
 
 /**
  * @title TutellusPartnerCrowdsale
@@ -12,13 +12,13 @@ import "./TutellusToken.sol";
 contract TutellusPartnerCrowdsale is CappedCrowdsale, Pausable {
     event Withdrawal(address indexed beneficiary, uint256 amount);
 
-    // Vestings defined
-    mapping(address => address) public vestingsContracts;
-
-    address partner;   //Partner Address.
+    address public partner;   //Partner Address.
     uint256 cliff;
     uint256 duration;
     uint256 percent;
+
+    TutellusVault vault;
+    TutellusVestingFactory vestingFactory;
 
     function TutellusPartnerCrowdsale(
         uint256 _startTime,
@@ -30,39 +30,27 @@ contract TutellusPartnerCrowdsale is CappedCrowdsale, Pausable {
         address _wallet,
         address _partner,
         uint256 _percent,
-        address _tokenAddress
+        address _tutellusVault,
+        address _tutellusVestingFactory
     )
         CappedCrowdsale(_cap)
         Crowdsale(_startTime, _endTime, _rate, _wallet)
     {
         require(_partner != address(0));
+        require(_tutellusVault != address(0));
+        require(_tutellusVestingFactory != address(0));
         require(_cliff <= _duration);
         require(_percent >= 0 && _percent <= 100);
+
+        vault = TutellusVault(_tutellusVault);
+        token = MintableToken(vault.token());
+
+        vestingFactory = TutellusVestingFactory(_tutellusVestingFactory);
 
         partner = _partner;
         cliff = _cliff;
         duration = _duration;
         percent = _percent;
-
-        if (_tokenAddress != address(0)) {
-            token = TutellusToken(_tokenAddress);
-        }
-    }
-
-    function getVesting(address _address) public constant returns(address) {
-        return vestingsContracts[_address];
-    }
-
-    function getValidVesting(address _address) internal returns(address) {
-        address vestingAddress = getVesting(_address);
-        // check, if not have already one
-        if (vestingAddress == address(0)) {
-            // generate the vesting contract
-            vestingAddress = new TokenVesting(_address, now, cliff, duration, true);
-            // saving for reuse
-            vestingsContracts[_address] = vestingAddress;
-        }
-        return vestingAddress;
     }
 
     function buyTokens(address beneficiary) whenNotPaused public payable {
@@ -77,9 +65,10 @@ contract TutellusPartnerCrowdsale is CappedCrowdsale, Pausable {
         // update state
         weiRaised = weiRaised.add(weiAmount);
 
-        address vestingAddress = getValidVesting(beneficiary);
+        vestingFactory.createVesting(beneficiary, endTime, cliff, duration);
+        address vestingAddress = vestingFactory.getVesting(beneficiary);
 
-        token.mint(vestingAddress, tokens);
+        vault.mint(vestingAddress, tokens);
         TokenPurchase(msg.sender, beneficiary, weiAmount, tokens);
 
         forwardFunds();
@@ -91,9 +80,7 @@ contract TutellusPartnerCrowdsale is CappedCrowdsale, Pausable {
         wallet.transfer(walletAmount);
     }
 
-    function createTokenContract() internal returns (MintableToken) {
-        return new TutellusToken();
-    }
+    function createTokenContract() internal returns (MintableToken) {}
 
     function withdraw() public {
         require(hasEnded());

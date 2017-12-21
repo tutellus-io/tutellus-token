@@ -16,6 +16,7 @@ contract TokenVesting is Ownable {
   using SafeMath for uint256;
   using SafeERC20 for ERC20Basic;
 
+  event KYCValid(address beneficiary);
   event Released(uint256 amount);
   event Revoked();
 
@@ -117,7 +118,9 @@ contract TokenVesting is Ownable {
     }
   }
 
-  function setValidKYC(bool _valid) public onlyOwner {
-    kycValid = _valid;
+  function setValidKYC() onlyOwner public returns (bool) {
+    kycValid = true;
+    KYCValid(beneficiary);
+    return true;
   }
 }

@@ -67,7 +67,7 @@ contract('TokenVesting', ([owner, investor]) => {
             .should.be.rejectedWith(EVMThrow);
         });
         it('release should be accepted when kyc is valid', async() => {
-            await vesting.setValidKYC(true, {from: owner});
+            await vesting.setValidKYC({from: owner});
             await vesting.release(token.address)
             .should.be.fulfilled;
         });
@@ -76,7 +76,7 @@ contract('TokenVesting', ([owner, investor]) => {
         beforeEach(async() => {
             const endTime = moment(startTime).add(duration, 'seconds');
             await increaseTimeTo(endTime);
-            await vesting.setValidKYC(true, {from: owner});
+            await vesting.setValidKYC({from: owner});
             await vesting.release(token.address);
         });
         it('investor should have all tokens', async() => {
